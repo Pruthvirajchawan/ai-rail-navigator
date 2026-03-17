@@ -4,7 +4,7 @@ import { createInitialState, simulateTick } from '@/lib/railway-engine';
 
 export function useSimulation() {
   const [state, setState] = useState<SimulationState>(createInitialState);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [history, setHistory] = useState<{ tick: number; onTime: number; avgDelay: number; efficiency: number }[]>([]);
 
   const tick = useCallback(() => {
