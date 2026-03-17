@@ -1,50 +1,42 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SimulationState } from '@/lib/railway-types';
-import { createInitialState, simulateTick } from '@/lib/railway-engine';
+import { SimulationState, WhatIfScenario } from '@/lib/railway-types';
+import { createInitialState, simulateTick, applyScenario } from '@/lib/railway-engine';
 
 export function useSimulation() {
   const [state, setState] = useState<SimulationState>(createInitialState);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [history, setHistory] = useState<{ tick: number; onTime: number; avgDelay: number; efficiency: number }[]>([]);
+  const [history, setHistory] = useState<{ tick: number; onTime: number; avgDelay: number; efficiency: number; throughput: number; congestion: number }[]>([]);
 
   const tick = useCallback(() => {
-    setState(prev => {
-      const next = simulateTick(prev);
-      return next;
-    });
+    setState(prev => simulateTick(prev));
   }, []);
 
   useEffect(() => {
     if (state.running) {
-      intervalRef.current = setInterval(tick, 800 / state.speed);
+      intervalRef.current = setInterval(tick, 700 / state.speed);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [state.running, state.speed, tick]);
 
-  // Record history every 5 ticks
   useEffect(() => {
-    if (state.tick % 5 === 0 && state.tick > 0) {
-      setHistory(prev => [...prev.slice(-50), {
+    if (state.tick % 4 === 0 && state.tick > 0) {
+      setHistory(prev => [...prev.slice(-55), {
         tick: state.tick,
         onTime: state.metrics.onTimePercentage,
         avgDelay: state.metrics.averageDelay,
         efficiency: state.metrics.efficiency,
+        throughput: state.metrics.throughput,
+        congestion: state.metrics.congestionIndex,
       }]);
     }
   }, [state.tick, state.metrics]);
 
-  const toggleRunning = useCallback(() => {
-    setState(prev => ({ ...prev, running: !prev.running }));
+  const toggleRunning = useCallback(() => setState(prev => ({ ...prev, running: !prev.running })), []);
+  const setSpeed = useCallback((speed: number) => setState(prev => ({ ...prev, speed })), []);
+  const reset = useCallback(() => { setState(createInitialState()); setHistory([]); }, []);
+  const runScenario = useCallback((scenario: WhatIfScenario) => {
+    setState(prev => applyScenario(prev, scenario));
   }, []);
 
-  const setSpeed = useCallback((speed: number) => {
-    setState(prev => ({ ...prev, speed }));
-  }, []);
-
-  const reset = useCallback(() => {
-    setState(createInitialState());
-    setHistory([]);
-  }, []);
-
-  return { state, history, toggleRunning, setSpeed, reset };
+  return { state, history, toggleRunning, setSpeed, reset, runScenario };
 }

@@ -7,6 +7,24 @@ interface TrackVisualizationProps {
   trains: Train[];
 }
 
+const trackColor = (status: TrackSection['status']) => {
+  switch (status) {
+    case 'congested': return 'hsl(var(--danger))';
+    case 'occupied': return 'hsl(var(--warning))';
+    case 'maintenance': return 'hsl(var(--muted-foreground))';
+    default: return 'hsl(var(--border))';
+  }
+};
+
+const trainColor = (status: Train['status']) => {
+  switch (status) {
+    case 'delayed': return 'hsl(var(--warning))';
+    case 'stopped': return 'hsl(var(--danger))';
+    case 'arrived': return 'hsl(var(--cyan))';
+    default: return 'hsl(var(--primary))';
+  }
+};
+
 export function TrackVisualization({ stations, tracks, trains }: TrackVisualizationProps) {
   const stationMap = useMemo(() => new Map(stations.map(s => [s.id, s])), [stations]);
 
@@ -18,72 +36,116 @@ export function TrackVisualization({ stations, tracks, trains }: TrackVisualizat
       const from = stationMap.get(fromId);
       const to = stationMap.get(toId);
       if (!from || !to) return null;
-      const x = from.x + (to.x - from.x) * train.progress;
-      const y = from.y + (to.y - from.y) * train.progress;
-      return { ...train, x, y };
+      return {
+        ...train,
+        x: from.x + (to.x - from.x) * train.progress,
+        y: from.y + (to.y - from.y) * train.progress,
+      };
     }).filter(Boolean) as (Train & { x: number; y: number })[];
   }, [trains, stationMap]);
 
   return (
-    <div className="glass-panel rounded-lg overflow-hidden">
-      <div className="p-4 border-b border-border">
-        <h3 className="font-display text-sm uppercase tracking-wider text-muted-foreground">Live Track Map</h3>
+    <div className="glass rounded-lg overflow-hidden h-full flex flex-col">
+      <div className="p-3 border-b border-border flex items-center justify-between">
+        <h3 className="font-display text-xs uppercase tracking-wider text-muted-foreground">Live Network Map</h3>
+        <div className="flex items-center gap-3 text-[9px] font-display text-muted-foreground">
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-success" />On-Time</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-warning" />Delayed</span>
+          <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-danger" />Stopped</span>
+        </div>
       </div>
-      <div className="p-2">
-        <svg viewBox="0 0 620 400" className="w-full h-auto" style={{ minHeight: 250 }}>
-          {/* Track lines */}
+      <div className="p-2 flex-1 relative">
+        <svg viewBox="0 0 800 420" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+          {/* Grid pattern */}
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(var(--border))" strokeWidth="0.3" opacity="0.3" />
+            </pattern>
+          </defs>
+          <rect width="800" height="420" fill="url(#grid)" />
+
+          {/* Tracks */}
           {tracks.map(track => {
             const from = stationMap.get(track.from);
             const to = stationMap.get(track.to);
             if (!from || !to) return null;
-            const color = track.status === 'maintenance' ? 'hsl(var(--warning))' : 'hsl(var(--border))';
+            const color = trackColor(track.status);
             return (
-              <line
-                key={track.id}
-                x1={from.x} y1={from.y}
-                x2={to.x} y2={to.y}
-                stroke={color}
-                strokeWidth={track.status === 'maintenance' ? 3 : 2}
-                strokeDasharray={track.status === 'maintenance' ? '6 3' : undefined}
-              />
+              <g key={track.id}>
+                <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                  stroke={color} strokeWidth={track.status === 'congested' ? 3 : 2}
+                  strokeDasharray={track.status === 'maintenance' ? '8 4' : undefined}
+                  opacity={0.6}
+                />
+                {/* Track label */}
+                <text
+                  x={(from.x + to.x) / 2} y={(from.y + to.y) / 2 - 6}
+                  textAnchor="middle" fill="hsl(var(--muted-foreground))"
+                  fontSize={7} fontFamily="var(--font-display)" opacity={0.5}
+                >
+                  {track.distance}km
+                </text>
+              </g>
             );
           })}
-          
+
           {/* Stations */}
-          {stations.map(station => (
-            <g key={station.id}>
-              <circle cx={station.x} cy={station.y} r={10} fill="hsl(var(--card))" stroke="hsl(var(--primary))" strokeWidth={2} />
-              <text
-                x={station.x} y={station.y + 24}
-                textAnchor="middle"
-                fill="hsl(var(--muted-foreground))"
-                fontSize={10}
-                fontFamily="var(--font-display)"
-              >
-                {station.name}
-              </text>
-            </g>
-          ))}
+          {stations.map(station => {
+            const isTerminal = station.type === 'terminal';
+            const isJunction = station.type === 'junction';
+            const r = isTerminal ? 12 : isJunction ? 9 : 7;
+            return (
+              <g key={station.id}>
+                {/* Station glow */}
+                <circle cx={station.x} cy={station.y} r={r + 4}
+                  fill="hsl(var(--primary))" opacity={0.06} />
+                {/* Station body */}
+                <circle cx={station.x} cy={station.y} r={r}
+                  fill="hsl(var(--card))" stroke="hsl(var(--primary))"
+                  strokeWidth={isTerminal ? 2.5 : 1.5} />
+                {/* Code inside */}
+                <text x={station.x} y={station.y + 3}
+                  textAnchor="middle" fill="hsl(var(--primary))"
+                  fontSize={isTerminal ? 7 : 6} fontFamily="var(--font-display)" fontWeight="bold"
+                >
+                  {station.id}
+                </text>
+                {/* Name below */}
+                <text x={station.x} y={station.y + r + 12}
+                  textAnchor="middle" fill="hsl(var(--muted-foreground))"
+                  fontSize={8} fontFamily="var(--font-body)"
+                >
+                  {station.name}
+                </text>
+                {/* Zone badge */}
+                <text x={station.x} y={station.y - r - 4}
+                  textAnchor="middle" fill="hsl(var(--muted-foreground))"
+                  fontSize={6} fontFamily="var(--font-display)" opacity={0.5}
+                >
+                  {station.zone}
+                </text>
+              </g>
+            );
+          })}
 
           {/* Trains */}
           {trainPositions.map(train => {
-            const color = train.status === 'delayed' ? 'hsl(var(--warning))'
-              : train.status === 'stopped' ? 'hsl(var(--danger))'
-              : 'hsl(var(--primary))';
+            const color = trainColor(train.status);
             return (
               <g key={train.id}>
-                <circle cx={train.x} cy={train.y} r={7} fill={color} opacity={0.3}>
-                  <animate attributeName="r" values="7;12;7" dur="2s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.3;0.1;0.3" dur="2s" repeatCount="indefinite" />
+                {/* Pulse */}
+                <circle cx={train.x} cy={train.y} r={8} fill={color} opacity={0.15}>
+                  <animate attributeName="r" values="8;16;8" dur="2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.15;0.03;0.15" dur="2s" repeatCount="indefinite" />
                 </circle>
+                {/* Train dot */}
                 <circle cx={train.x} cy={train.y} r={5} fill={color} />
-                <text
-                  x={train.x} y={train.y - 12}
-                  textAnchor="middle"
-                  fill="hsl(var(--foreground))"
-                  fontSize={8}
-                  fontFamily="var(--font-display)"
-                  fontWeight="bold"
+                {/* Label */}
+                <rect x={train.x - 16} y={train.y - 18} width={32} height={11} rx={2}
+                  fill="hsl(var(--card))" stroke={color} strokeWidth={0.5} opacity={0.9} />
+                <text x={train.x} y={train.y - 10}
+                  textAnchor="middle" fill={color}
+                  fontSize={6} fontFamily="var(--font-display)" fontWeight="bold"
                 >
                   {train.id}
                 </text>
