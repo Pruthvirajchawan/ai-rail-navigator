@@ -338,40 +338,56 @@ export function simulateTick(state: SimulationState): SimulationState {
     return { ...track, status: (load >= 3 ? 'congested' : load >= 2 ? 'occupied' : track.status === 'maintenance' ? 'maintenance' : 'clear') as TrackSection['status'] };
   });
 
-  // Alerts
+  // Alerts — de-duplicated to prevent spam
   let newAlerts = [...state.alerts.filter(a => !a.resolved && (!a.autoResolveAt || a.autoResolveAt > newTick))];
 
+  const hasRecentAlert = (type: string, key: string, cooldown: number) =>
+    newAlerts.some(a => a.type === type && (a.trainId === key || a.sectionId === key) && (newTick - a.timestamp) < cooldown);
+
+  // Conflicts: highest-risk per section only, ignore low-risk (silently auto-resolved)
+  const conflictsBySection = new Map<string, typeof conflicts[number]>();
   for (const c of conflicts) {
+    const existing = conflictsBySection.get(c.section);
+    if (!existing || c.risk > existing.risk) conflictsBySection.set(c.section, c);
+  }
+  for (const c of conflictsBySection.values()) {
+    if (c.risk < 30) continue;
+    if (hasRecentAlert('conflict', c.section, 30)) continue;
     newAlerts.push({
-      id: `alert-c-${newTick}-${c.trainA}`, type: 'conflict', severity: 'critical',
+      id: `alert-c-${newTick}-${c.section}`, type: 'conflict', severity: 'critical',
       title: 'Track Conflict Detected',
       message: `${c.trainA} and ${c.trainB} on ${c.section}. Risk: ${c.risk}%. Auto-resolving by priority.`,
-      trainId: c.trainA, sectionId: c.section, timestamp: newTick, resolved: false, autoResolveAt: newTick + 15,
+      trainId: c.trainA, sectionId: c.section, timestamp: newTick, resolved: false, autoResolveAt: newTick + 25,
     });
   }
 
-  for (const t of respawned) {
-    if (t.delay > 10 && newTick % 25 === 0 && t.status !== 'arrived') {
+  // Severe delay alerts: one per train, long cooldown
+  if (newTick % 35 === 0) {
+    for (const t of respawned) {
+      if (t.delay > 12 && t.status !== 'arrived' && !hasRecentAlert('delay', t.id, 80)) {
+        newAlerts.push({
+          id: `alert-d-${newTick}-${t.id}`, type: 'delay', severity: 'warning',
+          title: `${t.name} Severely Delayed`,
+          message: `Running ${t.delay.toFixed(0)} min behind schedule. Predicted: +${t.predictedDelay.toFixed(0)} min at destination.`,
+          trainId: t.id, timestamp: newTick, resolved: false, autoResolveAt: newTick + 60,
+        });
+      }
+    }
+  }
+
+  if (newTick % 120 === 0 && Math.random() < 0.3) {
+    const randomTrack = newTracks[Math.floor(Math.random() * newTracks.length)];
+    if (!hasRecentAlert('maintenance', randomTrack.id, 200)) {
       newAlerts.push({
-        id: `alert-d-${newTick}-${t.id}`, type: 'delay', severity: 'warning',
-        title: `${t.name} Severely Delayed`,
-        message: `Running ${t.delay.toFixed(0)} min behind schedule. Predicted: +${t.predictedDelay.toFixed(0)} min at destination.`,
-        trainId: t.id, timestamp: newTick, resolved: false, autoResolveAt: newTick + 40,
+        id: `alert-m-${newTick}`, type: 'maintenance', severity: 'info',
+        title: 'Maintenance Advisory',
+        message: `Scheduled inspection on ${randomTrack.id} (${randomTrack.from}→${randomTrack.to}). Speed restriction may apply.`,
+        sectionId: randomTrack.id, timestamp: newTick, resolved: false, autoResolveAt: newTick + 80,
       });
     }
   }
 
-  if (newTick % 80 === 0 && Math.random() < 0.4) {
-    const randomTrack = newTracks[Math.floor(Math.random() * newTracks.length)];
-    newAlerts.push({
-      id: `alert-m-${newTick}`, type: 'maintenance', severity: 'info',
-      title: 'Maintenance Advisory',
-      message: `Scheduled inspection on ${randomTrack.id} (${randomTrack.from}→${randomTrack.to}). Speed restriction may apply.`,
-      sectionId: randomTrack.id, timestamp: newTick, resolved: false, autoResolveAt: newTick + 50,
-    });
-  }
-
-  newAlerts = newAlerts.slice(-25);
+  newAlerts = newAlerts.slice(-15);
 
   // AI recommendations
   const recs = newTick % 8 === 0 ? generateRecommendations(respawned, conflicts, congestion, newTick) : state.recommendations;
