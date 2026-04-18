@@ -8,7 +8,11 @@ import { PerformanceCharts } from '@/components/dashboard/PerformanceCharts';
 import { SimulationControls } from '@/components/dashboard/SimulationControls';
 import { ScenarioPanel } from '@/components/dashboard/ScenarioPanel';
 import { VisionModal } from '@/components/dashboard/VisionModal';
-import { Train, Cpu, GitBranch, Brain, Shield } from 'lucide-react';
+import { SchedulingEngine } from '@/components/dashboard/SchedulingEngine';
+import { AIEngine } from '@/components/dashboard/AIEngine';
+import { ConflictResolver } from '@/components/dashboard/ConflictResolver';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Train, Cpu, GitBranch, Brain, Shield, CalendarClock } from 'lucide-react';
 
 const Index = () => {
   const { state, history, toggleRunning, setSpeed, reset, runScenario } = useSimulation();
@@ -79,6 +83,30 @@ const Index = () => {
             <TrainList trains={state.trains} />
           </div>
         </div>
+
+        {/* Engines: Scheduling · AI · Conflict Resolver */}
+        <Tabs defaultValue="scheduling" className="w-full">
+          <TabsList className="bg-secondary/30 border border-border h-auto p-1">
+            <TabsTrigger value="scheduling" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary text-[11px] font-display uppercase tracking-wider gap-1.5">
+              <CalendarClock className="w-3 h-3" /> Scheduling
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="data-[state=active]:bg-cyan/15 data-[state=active]:text-cyan text-[11px] font-display uppercase tracking-wider gap-1.5">
+              <Brain className="w-3 h-3" /> AI Engine
+            </TabsTrigger>
+            <TabsTrigger value="conflict" className="data-[state=active]:bg-accent/15 data-[state=active]:text-accent text-[11px] font-display uppercase tracking-wider gap-1.5">
+              <Shield className="w-3 h-3" /> Conflict Resolver
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="scheduling" className="mt-3">
+            <SchedulingEngine trains={state.trains} stations={state.stations} tick={state.tick} timeOfDay={state.timeOfDay} />
+          </TabsContent>
+          <TabsContent value="ai" className="mt-3">
+            <AIEngine trains={state.trains} stations={state.stations} tracks={state.tracks} />
+          </TabsContent>
+          <TabsContent value="conflict" className="mt-3">
+            <ConflictResolver trains={state.trains} conflictsResolved={state.metrics.conflictsResolved} />
+          </TabsContent>
+        </Tabs>
 
         {/* What-If Scenarios */}
         <ScenarioPanel onRunScenario={runScenario} />
