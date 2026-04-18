@@ -205,56 +205,100 @@ export function TrackVisualization({ stations, tracks, trains }: TrackVisualizat
             );
           })}
 
-          {/* Trains */}
+          {/* Trains - locomotive shape */}
           {trainPositions.map(train => {
             const color = trainColor(train.status);
             const isHovered = hoveredTrain === train.id;
+            const carriages = train.type === 'freight' ? 3 : train.type === 'superfast' ? 2 : 2;
+            const isMoving = train.status !== 'stopped' && train.speed > 0;
             return (
               <g key={train.id}
                 onMouseEnter={() => setHoveredTrain(train.id)}
                 onMouseLeave={() => setHoveredTrain(null)}
                 style={{ cursor: 'pointer' }}
               >
-                <circle cx={train.x} cy={train.y} r={8} fill={color} opacity={0.15}>
-                  <animate attributeName="r" values="8;16;8" dur="2s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.15;0.03;0.15" dur="2s" repeatCount="indefinite" />
+                {/* Pulse halo */}
+                <circle cx={train.x} cy={train.y} r={10} fill={color} opacity={0.12}>
+                  <animate attributeName="r" values="10;18;10" dur="2.2s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="0.12;0.02;0.12" dur="2.2s" repeatCount="indefinite" />
                 </circle>
-                <circle cx={train.x} cy={train.y} r={isHovered ? 7 : 5} fill={color}
-                  style={{ transition: 'all 0.15s' }}
-                />
-                {/* Direction triangle */}
-                {train.status !== 'stopped' && (
-                  <polygon
-                    points="0,-2 4,0 0,2"
-                    fill="hsl(var(--background))"
-                    transform={`translate(${train.x} ${train.y}) rotate(${train.angle})`}
-                  />
+
+                {/* Train body, oriented along travel angle */}
+                <g transform={`translate(${train.x} ${train.y}) rotate(${train.angle})`}>
+                  {/* Carriages (behind locomotive) */}
+                  {Array.from({ length: carriages }).map((_, i) => (
+                    <g key={i} transform={`translate(${-(i + 1) * 7} 0)`}>
+                      <rect x={-2.5} y={-2} width={5} height={4} rx={0.6}
+                        fill="hsl(var(--card))" stroke={color} strokeWidth={0.6} opacity={0.9}
+                      />
+                      <line x1={-2.5} y1={0} x2={2.5} y2={0} stroke={color} strokeWidth={0.3} opacity={0.5} />
+                    </g>
+                  ))}
+                  {/* Coupling lines */}
+                  {Array.from({ length: carriages }).map((_, i) => (
+                    <line key={`c-${i}`}
+                      x1={-(i + 1) * 7 + 2.5} y1={0}
+                      x2={-i * 7 - 2.5} y2={0}
+                      stroke={color} strokeWidth={0.4} opacity={0.6}
+                    />
+                  ))}
+                  {/* Locomotive (front) */}
+                  <g>
+                    {/* Body */}
+                    <rect x={-3} y={-2.5} width={5} height={5} rx={0.8} fill={color} stroke="hsl(var(--background))" strokeWidth={0.4} />
+                    {/* Nose */}
+                    <polygon points="2,-2.5 5,0 2,2.5" fill={color} stroke="hsl(var(--background))" strokeWidth={0.4} />
+                    {/* Window */}
+                    <rect x={0.5} y={-1.2} width={1.5} height={2.4} fill="hsl(var(--background))" opacity={0.8} />
+                    {/* Headlight */}
+                    {isMoving && (
+                      <circle cx={4} cy={0} r={0.6} fill="hsl(var(--accent))">
+                        <animate attributeName="opacity" values="1;0.4;1" dur="1.2s" repeatCount="indefinite" />
+                      </circle>
+                    )}
+                  </g>
+                </g>
+
+                {/* Steam/smoke puff for moving trains */}
+                {isMoving && train.type !== 'superfast' && (
+                  <circle cx={train.x - Math.cos(train.angle * Math.PI / 180) * 8} cy={train.y - Math.sin(train.angle * Math.PI / 180) * 8} r={1.5} fill="hsl(var(--muted-foreground))" opacity={0.3}>
+                    <animate attributeName="r" values="0.5;3;0.5" dur="1.5s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.4;0;0.4" dur="1.5s" repeatCount="indefinite" />
+                  </circle>
                 )}
-                <rect x={train.x - 18} y={train.y - 20} width={36} height={11} rx={2}
-                  fill="hsl(var(--card))" stroke={color} strokeWidth={0.5} opacity={0.95} />
-                <text x={train.x} y={train.y - 12}
+
+                {/* Train ID label */}
+                <rect x={train.x - 18} y={train.y - 22} width={36} height={11} rx={2}
+                  fill="hsl(var(--card))" stroke={color} strokeWidth={0.5} opacity={0.95}
+                  style={{ pointerEvents: 'none' }}
+                />
+                <text x={train.x} y={train.y - 14}
                   textAnchor="middle" fill={color}
                   fontSize={6.5} fontFamily="var(--font-display)" fontWeight="bold"
                   style={{ pointerEvents: 'none' }}
                 >
                   {train.id}
                 </text>
+
+                {/* Hover hitbox */}
+                <circle cx={train.x} cy={train.y} r={isHovered ? 14 : 10} fill="transparent" />
+
                 {isHovered && (
                   <g style={{ pointerEvents: 'none' }}>
-                    <rect x={train.x + 10} y={train.y + 8} width={140} height={48} rx={4}
+                    <rect x={train.x + 10} y={train.y + 8} width={150} height={50} rx={4}
                       fill="hsl(var(--popover))" stroke={color} strokeWidth={0.5} opacity={0.97}
                     />
-                    <text x={train.x + 16} y={train.y + 20}
+                    <text x={train.x + 16} y={train.y + 21}
                       fill="hsl(var(--foreground))" fontSize={9} fontFamily="var(--font-display)" fontWeight="bold"
                     >
                       {train.name}
                     </text>
-                    <text x={train.x + 16} y={train.y + 31}
+                    <text x={train.x + 16} y={train.y + 33}
                       fill="hsl(var(--muted-foreground))" fontSize={7} fontFamily="var(--font-display)"
                     >
                       {train.fromId} → {train.toId} · {train.speed} km/h
                     </text>
-                    <text x={train.x + 16} y={train.y + 42}
+                    <text x={train.x + 16} y={train.y + 44}
                       fill={train.delay > 2 ? 'hsl(var(--warning))' : 'hsl(var(--success))'}
                       fontSize={7} fontFamily="var(--font-display)"
                     >
